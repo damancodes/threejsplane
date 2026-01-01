@@ -1,16 +1,92 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="src/style.css" />
+    <title>Three.js Scroll Animation</title>
+    <style>
+      #canvas-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100vh;
+        z-index: 0;
+        pointer-events: none;
+      }
+      section {
+        position: relative;
+        z-index: 10;
+        height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+      }
 
+      /* Stars Container */
+      #stars-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 5;
+        pointer-events: none;
+        overflow: hidden;
+      }
 
-    <title>threejs</title>
+      .star {
+        position: absolute;
+        width: 3px;
+        height: 3px;
+        background: white;
+        border-radius: 50%;
+        box-shadow: 0 0 6px 2px rgba(255, 255, 255, 0.6),
+                    0 0 12px 4px rgba(255, 255, 255, 0.3);
+        opacity: 0;
+      }
+
+      .star.large {
+        width: 4px;
+        height: 4px;
+        box-shadow: 0 0 8px 3px rgba(255, 255, 255, 0.7),
+                    0 0 16px 6px rgba(255, 255, 255, 0.4);
+      }
+    </style>
   </head>
-  <body>
-    <div id="app"></div>
-    <div class="text-red-500 ">helo</div>
+  <body class="min-h-[300vh] bg-gray-900 ">
+    <!-- Stars Layer -->
+    <div id="stars-container"></div>
+
+    <div id="canvas-container" class="bg-linear-to-b from-gray-900 to-gray-300 "></div>
+
+    <main>
+      <section>
+        <h1
+          class="text-6xl font-black uppercase italic tracking-tighter opacity-20"
+        >
+          The Beginning
+        </h1>
+      </section>
+      <section>
+        <h1
+          class="text-6xl font-black uppercase italic tracking-tighter opacity-20"
+        >
+          Smooth Rotation
+        </h1>
+      </section>
+      <section>
+        <h1
+          class="text-6xl font-black uppercase italic tracking-tighter opacity-20"
+        >
+          End of Journey
+        </h1>
+      </section>
+    </main>
+
     <script type="module" src="/src/main.ts"></script>
+    <script type="module" src="/src/stars.ts"></script>
   </body>
 </html>

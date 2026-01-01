@@ -6,13 +6,82 @@
     <link rel="stylesheet" href="src/style.css" />
     <title>Three.js Scroll Animation</title>
     <style>
-      #canvas-container {
+      #sky-gradient {
         position: fixed;
         top: 0;
         left: 0;
         width: 100%;
         height: 100vh;
         z-index: 0;
+        pointer-events: none;
+      }
+
+      #clouds-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100vh;
+        z-index: 1;
+        pointer-events: none;
+      }
+
+      .cloud {
+        position: absolute;
+        filter: blur(1px); /* Soften edges slightly */
+        opacity: 0.1;
+      }
+
+      /* Cloud 1 - Top Leftish */
+      .cloud-1 {
+        top: -10%;
+        left: -10%;
+        width: 60%;
+        max-width: 800px;
+        animation: floatOne 60s ease-in-out infinite alternate;
+      }
+
+      /* Cloud 2 - Bottom Rightish */
+      .cloud-2 {
+        bottom: -15%;
+        right: -5%;
+        width: 70%;
+        max-width: 900px;
+        animation: floatTwo 70s ease-in-out infinite alternate;
+      }
+      .cloud-3 {
+        top: 0;
+        right: -5%;
+        width: 70%;
+        max-width: 900px;
+        animation: floatTwo 70s ease-in-out infinite alternate;
+      }
+
+      @keyframes floatOne {
+        0% {
+          transform: translate(0, 0);
+        }
+        100% {
+          transform: translate(20px, 15px);
+        }
+      }
+
+      @keyframes floatTwo {
+        0% {
+          transform: translate(0, 0);
+        }
+        100% {
+          transform: translate(-25px, -10px);
+        }
+      }
+
+      #canvas-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100vh;
+        z-index: 2; /* Still behind stars (5) and text (10) but above clouds (1) */
         pointer-events: none;
       }
       section {
@@ -44,7 +113,7 @@
         background: white;
         border-radius: 50%;
         box-shadow: 0 0 6px 2px rgba(255, 255, 255, 0.6),
-                    0 0 12px 4px rgba(255, 255, 255, 0.3);
+          0 0 12px 4px rgba(255, 255, 255, 0.3);
         opacity: 0;
       }
 
@@ -52,35 +121,43 @@
         width: 4px;
         height: 4px;
         box-shadow: 0 0 8px 3px rgba(255, 255, 255, 0.7),
-                    0 0 16px 6px rgba(255, 255, 255, 0.4);
+          0 0 16px 6px rgba(255, 255, 255, 0.4);
       }
     </style>
   </head>
-  <body class="min-h-[300vh] bg-gray-900 ">
-    <!-- Stars Layer -->
-    <div id="stars-container"></div>
+  <body class="min-h-[300vh] bg-gray-900">
+    <!-- 1. Background Gradient -->
+    <div
+      id="sky-gradient"
+      class="bg-linear-to-b from-gray-900 to-gray-300"
+    ></div>
 
-    <div id="canvas-container" class="bg-linear-to-b from-gray-900 to-gray-300 "></div>
+    <!-- 2. Clouds Layer -->
+    <div id="clouds-container">
+      <img src="/images/cloud.png" alt="" class="cloud cloud-1" />
+      <img src="/images/cloud.png" alt="" class="cloud cloud-2" />
+      <img src="/images/cloud.png" alt="" class="cloud cloud-3" />
+    </div>
+
+    <!-- 3. WebGL Scene Layer -->
+    <div id="canvas-container"></div>
+
+    <!-- 4. Stars Layer -->
+    <div id="stars-container"></div>
 
     <main>
       <section>
-        <h1
-          class="text-6xl font-black uppercase italic tracking-tighter opacity-20"
-        >
+        <h1 class="text-6xl font-black uppercase italic tracking-tighter">
           The Beginning
         </h1>
       </section>
       <section>
-        <h1
-          class="text-6xl font-black uppercase italic tracking-tighter opacity-20"
-        >
+        <h1 class="text-6xl font-black uppercase italic tracking-tighter">
           Smooth Rotation
         </h1>
       </section>
       <section>
-        <h1
-          class="text-6xl font-black uppercase italic tracking-tighter opacity-20"
-        >
+        <h1 class="text-6xl font-black uppercase italic tracking-tighter">
           End of Journey
         </h1>
       </section>

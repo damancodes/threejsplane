@@ -94,12 +94,11 @@ rippleGroup.position.y = -175;
 modelWrapper.add(rippleGroup);
 
 function createRipple() {
-  const rippleGeometry = new THREE.RingGeometry(20, 35, 64);
+  const rippleGeometry = new THREE.RingGeometry(20, 25, 64);
   const rippleMaterial = new THREE.MeshBasicMaterial({
     color: 0xffffff,
     transparent: true,
-    opacity: 0.3,
-    side: THREE.DoubleSide,
+    opacity: 0.6,
   });
   const ripple = new THREE.Mesh(rippleGeometry, rippleMaterial);
   rippleGroup.add(ripple);
@@ -148,6 +147,17 @@ const onMouseMove = (event: MouseEvent) => {
     ease: "power2.out",
     overwrite: true,
   });
+
+  const cloudsContainer = document.querySelector("#clouds-container");
+  if (cloudsContainer) {
+    gsap.to(cloudsContainer, {
+      x: x * 30, // Move 30px horizontally
+      y: -y * 30, // Move 30px vertically
+      duration: 1.5,
+      ease: "power2.out",
+      overwrite: true,
+    });
+  }
 };
 
 window.addEventListener("mousemove", onMouseMove);

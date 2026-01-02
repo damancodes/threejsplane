@@ -82,7 +82,6 @@
         width: 100%;
         height: 100vh;
         z-index: 2; /* Still behind stars (5) and text (10) but above clouds (1) */
-        pointer-events: none;
       }
       section {
         position: relative;
@@ -125,7 +124,7 @@
       }
     </style>
   </head>
-  <body class="min-h-[300vh] bg-gray-900">
+  <body class="min-h-[300vh]">
     <!-- 1. Background Gradient -->
     <div
       id="sky-gradient"
@@ -143,23 +142,17 @@
     <div id="canvas-container"></div>
 
     <!-- 4. Stars Layer -->
-    <div id="stars-container"></div>
+    <!-- <div id="stars-container"></div> -->
 
     <main>
       <section>
-        <h1 class="text-6xl font-black uppercase italic tracking-tighter">
-          The Beginning
-        </h1>
+        <h1 class="text-6xl font-black uppercase italic tracking-tighter"></h1>
       </section>
       <section>
-        <h1 class="text-6xl font-black uppercase italic tracking-tighter">
-          Smooth Rotation
-        </h1>
+        <h1 class="text-6xl font-black uppercase italic tracking-tighter"></h1>
       </section>
       <section>
-        <h1 class="text-6xl font-black uppercase italic tracking-tighter">
-          End of Journey
-        </h1>
+        <h1 class="text-6xl font-black uppercase italic tracking-tighter"></h1>
       </section>
     </main>
 

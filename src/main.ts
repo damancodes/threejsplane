@@ -1,14 +1,14 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 gsap.registerPlugin(ScrollTrigger);
 
 /* ------------------ SETUP ------------------ */
 const container = document.querySelector("#canvas-container") as HTMLElement;
-const scene = new THREE.Scene();
 
 const camera = new THREE.PerspectiveCamera(
   45,
@@ -16,34 +16,44 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   10000
 );
+
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+
+controls.minDistance = 5;
+controls.maxDistance = 20;
+controls.minPolarAngle = 0.5;
+controls.maxPolarAngle = 1.5;
+controls.autoRotate = false;
+controls.target = new THREE.Vector3(0, 1, 0);
+controls.enabled = false;
+controls.update();
+
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.VSMShadowMap; // Very smooth shadows
-
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-// Physical lighting correction
+renderer.setPixelRatio(window.devicePixelRatio);
 
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.2;
 container.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+const axesHelper = new THREE.AxesHelper(500);
+scene.add(axesHelper);
+scene.receiveShadow = true;
 
-/* ------------------ ENVIRONMENT & LIGHTS ------------------ */
-scene.add(new THREE.AmbientLight(0xffffff, 0.15)); // Lowered ambient slightly for better contrast
-const sunLight = new THREE.DirectionalLight(0xffffff, 3);
-sunLight.position.set(0, 100, 50);
-sunLight.castShadow = true;
+// Ground mesh
+const groundGeometry = new THREE.PlaneGeometry(2100, 2100, 32, 32);
+groundGeometry.rotateX(-Math.PI / 2);
+const groundMaterial = new THREE.ShadowMaterial({
+  opacity: 0.006,
+});
+const groundMesh = new THREE.Mesh(groundGeometry, groundMaterial);
+groundMesh.castShadow = false;
+groundMesh.receiveShadow = true;
 
-// Configure shadow properties for larger model
-sunLight.shadow.mapSize.width = 4096;
-sunLight.shadow.mapSize.height = 4096;
-
-scene.add(sunLight);
-
-// Setup PMREM to create reflections even without an HDR file
-const pmremGenerator = new THREE.PMREMGenerator(renderer);
-pmremGenerator.compileEquirectangularShader();
-scene.environment = pmremGenerator.fromScene(new THREE.Scene()).texture;
+scene.add(groundMesh);
+scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 
 /* ------------------ MODEL GROUPING ------------------ */
 const dragWrapper = new THREE.Group();
@@ -52,97 +62,51 @@ scene.add(dragWrapper);
 const modelWrapper = new THREE.Group();
 dragWrapper.add(modelWrapper);
 
-/* ------------------ SOFT BLURRED SHADOW ------------------ */
-// Create a very soft, blurred shadow using canvas
-const shadowSize = 512;
-const shadowCanvas = document.createElement('canvas');
-shadowCanvas.width = shadowSize;
-shadowCanvas.height = shadowSize;
-const ctx = shadowCanvas.getContext('2d')!;
-
-// Create a very soft radial gradient
-const gradient = ctx.createRadialGradient(
-  shadowSize / 2, shadowSize / 2, 0,
-  shadowSize / 2, shadowSize / 2, shadowSize / 2
-);
-gradient.addColorStop(0, 'rgba(0, 0, 0, 0.35)');
-gradient.addColorStop(0.3, 'rgba(0, 0, 0, 0.2)');
-gradient.addColorStop(0.6, 'rgba(0, 0, 0, 0.08)');
-gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-
-ctx.fillStyle = gradient;
-ctx.fillRect(0, 0, shadowSize, shadowSize);
-
-const shadowTexture = new THREE.CanvasTexture(shadowCanvas);
-const shadowMaterial = new THREE.MeshBasicMaterial({
-  map: shadowTexture,
-  transparent: true,
-  depthWrite: false,
-  opacity: 1,
-});
-
-const shadowGeometry = new THREE.PlaneGeometry(600, 600);
-const shadowMesh = new THREE.Mesh(shadowGeometry, shadowMaterial);
-shadowMesh.rotation.x = -Math.PI / 2;
-shadowMesh.position.y = -180;
-modelWrapper.add(shadowMesh);
-
 /* ------------------ RIPPLE EFFECT ------------------ */
 const rippleGroup = new THREE.Group();
-rippleGroup.rotation.x = -Math.PI / 2;
-rippleGroup.position.y = -175;
-modelWrapper.add(rippleGroup);
+// Placed slightly above the ground to avoid flickering
+rippleGroup.position.y = 0.5;
+scene.add(rippleGroup);
+
+const ringGeo = new THREE.RingGeometry(4, 4.5, 64);
+const ringMatBase = new THREE.MeshBasicMaterial({
+  color: 0xffffff,
+  transparent: true,
+  opacity: 0.5,
+  side: THREE.DoubleSide,
+});
 
 function createRipple() {
-  const rippleGeometry = new THREE.RingGeometry(20, 25, 64);
-  const rippleMaterial = new THREE.MeshBasicMaterial({
-    color: 0xffffff,
-    transparent: true,
-    opacity: 0.6,
-  });
-  const ripple = new THREE.Mesh(rippleGeometry, rippleMaterial);
-  rippleGroup.add(ripple);
+  const mesh = new THREE.Mesh(ringGeo, ringMatBase.clone());
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.scale.set(0, 0, 0);
+  rippleGroup.add(mesh);
 
-  // Animate the ripple expanding and fading
-  gsap.to(ripple.scale, {
-    x: 60,
-    y: 60,
-    duration: 4,
-    ease: "power1.out",
+  const tl = gsap.timeline({
     onComplete: () => {
-      rippleGroup.remove(ripple);
-      rippleGeometry.dispose();
-      rippleMaterial.dispose();
-      // Start next ripple when this one completes
-      createRipple();
+      rippleGroup.remove(mesh);
+      (mesh.material as THREE.Material).dispose();
     },
   });
 
-  gsap.to(rippleMaterial, {
-    opacity: 0,
-    duration: 4,
-    ease: "power1.out",
-  });
+  tl.to(mesh.scale, { x: 3, y: 3, z: 3, duration: 5, ease: "power1.out" });
+  tl.to(mesh.material, { opacity: 0, duration: 5, ease: "power1.out" }, "<");
+
+  // Loops the ripple creation
+  gsap.delayedCall(5, createRipple);
 }
-
-// Start the first ripple
-createRipple();
-
 
 /* ------------------ MOUSE PARALLAX ------------------ */
 const onMouseMove = (event: MouseEvent) => {
-  // Normalize mouse position (-1 to 1)
   const x = (event.clientX / window.innerWidth) * 2 - 1;
   const y = -(event.clientY / window.innerHeight) * 2 + 1;
 
-  // Apply subtle rotation based on mouse position
-  // Inverted y * 0.1 to -y * 0.1 to fix direction
-  const tiltX = -y * 0.1; 
+  const tiltX = -y * 0.1;
   const tiltY = x * 0.3;
 
   gsap.to(dragWrapper.rotation, {
-    x: tiltX,
-    y: tiltY,
+    x: tiltX * 0.25,
+    y: tiltY * 0.25,
     duration: 1,
     ease: "power2.out",
     overwrite: true,
@@ -151,8 +115,8 @@ const onMouseMove = (event: MouseEvent) => {
   const cloudsContainer = document.querySelector("#clouds-container");
   if (cloudsContainer) {
     gsap.to(cloudsContainer, {
-      x: x * 30, // Move 30px horizontally
-      y: -y * 30, // Move 30px vertically
+      x: x * 30,
+      y: -y * 30,
       duration: 1.5,
       ease: "power2.out",
       overwrite: true,
@@ -162,68 +126,90 @@ const onMouseMove = (event: MouseEvent) => {
 
 window.addEventListener("mousemove", onMouseMove);
 
-
-
 /* ------------------ LOADER ------------------ */
 const loader = new GLTFLoader();
 
-loader.load("/models/jet1/scene.gltf", (gltf) => {
-  const model = gltf.scene;
+loader.load("/models/jet3/blue.glb", (glb) => {
+  const model = glb.scene;
+  model.castShadow = true;
   modelWrapper.add(model);
 
-  /* ---------- APPLY METALLIC PROPERTIES & ENABLE SHADOWS ---------- */
   model.traverse((child) => {
-    if ((child as THREE.Mesh).isMesh) {
-      const mesh = child as THREE.Mesh;
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      // Ensure we are working with Standard Material for metalness
-      if (mesh.material instanceof THREE.MeshStandardMaterial) {
-        mesh.material.metalness = 0.7;
-        mesh.material.roughness = 0.35;
-        mesh.material.needsUpdate = true;
-      }
+    if ((child as any).isObject3D) {
+      child.castShadow = true;
+      child.receiveShadow = true;
     }
   });
 
-  /* ---------- AUTO-CENTER & AUTO-FRAME ---------- */
+  const boxHelper = new THREE.BoxHelper(model, 0xffff00);
+  modelWrapper.add(boxHelper);
+
+  // const gui = new GUI();
+
+  const flag = 0;
+  const planeSettings = {
+    rotateX: flag ? 0 : 0,
+    rotateY: flag ? 0 : 56.16,
+    rotateZ: flag ? 0 : 8.76,
+  };
+
+  const updateRotation = () => {
+    modelWrapper.rotation.set(
+      THREE.MathUtils.degToRad(planeSettings.rotateX),
+      THREE.MathUtils.degToRad(planeSettings.rotateY),
+      THREE.MathUtils.degToRad(planeSettings.rotateZ)
+    );
+  };
+  updateRotation();
+
+  /* ---------- AUTO-CENTER & LIGHTING ---------- */
   const box = new THREE.Box3().setFromObject(model);
   const boxSize = box.getSize(new THREE.Vector3()).length();
   const boxCenter = box.getCenter(new THREE.Vector3());
 
-  const halfSizeToFitOnScreen = boxSize * 0.4;
-  const halfFov = THREE.MathUtils.degToRad(camera.fov * 0.5);
-  const distance = halfSizeToFitOnScreen / Math.tan(halfFov);
+  const spotLight = new THREE.SpotLight(
+    0xffffff,
+    150,
+    boxSize * 10,
+    Math.PI / 5,
+    0.4,
+    1
+  );
+  spotLight.position.set(
+    boxCenter.x + 2,
+    boxCenter.y + boxSize * 2,
+    boxCenter.z + boxSize * 1.5
+  );
+  spotLight.target.position.copy(boxCenter);
+  spotLight.castShadow = true;
+  spotLight.shadow.bias = -0.00005;
+  spotLight.shadow.radius = 4;
 
+  spotLight.shadow.mapSize.set(5000, 5000);
+
+  modelWrapper.add(spotLight);
+
+  // Original Camera Positioning
+  const halfFov = THREE.MathUtils.degToRad(camera.fov * 0.5);
+  const distance = (boxSize * 0.5) / Math.tan(halfFov);
   const direction = new THREE.Vector3()
     .subVectors(boxCenter, camera.position)
     .normalize();
   camera.position.copy(direction.multiplyScalar(distance).add(boxCenter));
-  camera.lookAt(boxCenter.x, boxCenter.y, boxCenter.z);
   camera.updateProjectionMatrix();
 
-
-
-
-  /* ---------- INITIAL STATE & ANIMATION ---------- */
-  model.rotation.set(
-    THREE.MathUtils.degToRad(-59.04),
-    THREE.MathUtils.degToRad(2.88),
-    THREE.MathUtils.degToRad(51.48)
-  );
-
+  /* ---------- ANIMATIONS ---------- */
   gsap.to(model.rotation, {
-    x: "+=0.1",
-    z: "+=0.1",
-    duration: 3,
+    z: -1 * THREE.MathUtils.degToRad(planeSettings.rotateZ),
+    duration: 2.5,
     repeat: -1,
     yoyo: true,
     ease: "sine.inOut",
   });
 
-  /* ---------- SCROLL ROTATION ---------- */
   gsap.to(modelWrapper.rotation, {
-    y: `-=${Math.PI * 0.2}`,
+    x: "-=0.1",
+    y: "-=0.8",
     scrollTrigger: {
       trigger: "body",
       start: "top top",
@@ -231,14 +217,17 @@ loader.load("/models/jet1/scene.gltf", (gltf) => {
       scrub: 1.5,
     },
   });
+
+  // Start Ripples
+  createRipple();
 });
 
 /* ------------------ ANIMATION LOOP ------------------ */
 function animate() {
   requestAnimationFrame(animate);
+  controls.update();
   renderer.render(scene, camera);
 }
-animate();
 animate();
 
 window.addEventListener("resize", () => {

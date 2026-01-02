@@ -55,6 +55,39 @@ groundMesh.receiveShadow = true;
 scene.add(groundMesh);
 scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 
+/* ------------------ PARTICLE SYSTEM ------------------ */
+const particleCount = 1000;
+const particlesGeometry = new THREE.BufferGeometry();
+const particlesPositions = new Float32Array(particleCount * 3);
+const particlesVelocities = new Float32Array(particleCount * 3);
+
+for (let i = 0; i < particleCount * 3; i += 3) {
+  particlesPositions[i] = (Math.random() - 0.5) * 100;
+  particlesPositions[i + 1] = Math.random() * 50;
+  particlesPositions[i + 2] = (Math.random() - 0.5) * 100;
+
+  particlesVelocities[i] = (Math.random() - 0.5) * 0.02;
+  particlesVelocities[i + 1] = Math.random() * 0.01;
+  particlesVelocities[i + 2] = (Math.random() - 0.5) * 0.02;
+}
+
+particlesGeometry.setAttribute(
+  "position",
+  new THREE.BufferAttribute(particlesPositions, 3)
+);
+
+const particlesMaterial = new THREE.PointsMaterial({
+  color: 0x88ccff,
+  size: 0.15,
+  transparent: true,
+  opacity: 0.6,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+});
+
+const particleSystem = new THREE.Points(particlesGeometry, particlesMaterial);
+scene.add(particleSystem);
+
 /* ------------------ MODEL GROUPING ------------------ */
 const dragWrapper = new THREE.Group();
 scene.add(dragWrapper);

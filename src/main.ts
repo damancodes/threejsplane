@@ -76,7 +76,7 @@ renderer.setPixelRatio(window.devicePixelRatio);
 
 container.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
-const axesHelper = new THREE.AxesHelper(500);
+
 scene.receiveShadow = true;
 
 // Ground mesh
@@ -239,8 +239,6 @@ loader.load("/models/jet3/blue.glb", (glb) => {
       child.receiveShadow = true;
     }
   });
-
-  const boxHelper = new THREE.BoxHelper(model, 0xffff00);
 
   const flag = 0;
   const planeSettings = {

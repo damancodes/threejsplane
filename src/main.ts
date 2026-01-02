@@ -7,6 +7,44 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 gsap.registerPlugin(ScrollTrigger);
 
+/* ------------------ LOADER ------------------ */
+const loaderEl = document.getElementById("loader") as HTMLElement;
+const loaderText = document.getElementById("loader-text") as HTMLElement;
+
+let displayedProgress = 0;
+
+const loadingManager = new THREE.LoadingManager(
+  () => {
+    gsap.to(loaderEl, {
+      opacity: 0,
+      duration: 0.8,
+      ease: "power2.out",
+      onComplete: () => {
+        loaderEl.style.display = "none";
+      },
+    });
+  },
+  (_, loaded, total) => {
+    const target = (loaded / total) * 100;
+
+    gsap.to(
+      { v: displayedProgress },
+      {
+        v: target,
+        duration: 0.25,
+        ease: "power1.out",
+        onUpdate() {
+          displayedProgress = Math.round(this.targets()[0].v);
+          loaderText.textContent = `${displayedProgress}%`;
+        },
+      }
+    );
+  },
+  (url) => {
+    console.error("Error loading:", url);
+  }
+);
+
 /* ------------------ SETUP ------------------ */
 const container = document.querySelector("#canvas-container") as HTMLElement;
 
@@ -39,7 +77,6 @@ renderer.setPixelRatio(window.devicePixelRatio);
 container.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 const axesHelper = new THREE.AxesHelper(500);
-scene.add(axesHelper);
 scene.receiveShadow = true;
 
 // Ground mesh
@@ -52,7 +89,6 @@ const groundMesh = new THREE.Mesh(groundGeometry, groundMaterial);
 groundMesh.castShadow = false;
 groundMesh.receiveShadow = true;
 
-scene.add(groundMesh);
 scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 
 /* ------------------ PARTICLE SYSTEM ------------------ */
@@ -97,7 +133,6 @@ dragWrapper.add(modelWrapper);
 
 /* ------------------ RIPPLE EFFECT ------------------ */
 const rippleGroup = new THREE.Group();
-// Placed slightly above the ground to avoid flickering
 rippleGroup.position.y = 0.5;
 scene.add(rippleGroup);
 
@@ -125,7 +160,6 @@ function createRipple() {
   tl.to(mesh.scale, { x: 3, y: 3, z: 3, duration: 5, ease: "power1.out" });
   tl.to(mesh.material, { opacity: 0, duration: 5, ease: "power1.out" }, "<");
 
-  // Loops the ripple creation
   gsap.delayedCall(5, createRipple);
 }
 
@@ -159,8 +193,40 @@ const onMouseMove = (event: MouseEvent) => {
 
 window.addEventListener("mousemove", onMouseMove);
 
+/* ------------------ CONTACT SHADOW (ROUNDED) ------------------ */
+function createContactShadow(size = 10, opacity = 0.35) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 256;
+
+  const ctx = canvas.getContext("2d")!;
+  const gradient = ctx.createRadialGradient(128, 128, 10, 128, 128, 128);
+
+  gradient.addColorStop(0, `rgba(0,0,0,${opacity})`);
+  gradient.addColorStop(1, "rgba(0,0,0,0)");
+
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, 256, 256);
+
+  const texture = new THREE.CanvasTexture(canvas);
+
+  const material = new THREE.MeshBasicMaterial({
+    map: texture,
+    transparent: true,
+    depthWrite: false,
+  });
+
+  const geometry = new THREE.PlaneGeometry(size, size);
+  const mesh = new THREE.Mesh(geometry, material);
+
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.renderOrder = 2;
+
+  return mesh;
+}
+
 /* ------------------ LOADER ------------------ */
-const loader = new GLTFLoader();
+const loader = new GLTFLoader(loadingManager);
 
 loader.load("/models/jet3/blue.glb", (glb) => {
   const model = glb.scene;
@@ -175,9 +241,6 @@ loader.load("/models/jet3/blue.glb", (glb) => {
   });
 
   const boxHelper = new THREE.BoxHelper(model, 0xffff00);
-  modelWrapper.add(boxHelper);
-
-  // const gui = new GUI();
 
   const flag = 0;
   const planeSettings = {
@@ -200,6 +263,11 @@ loader.load("/models/jet3/blue.glb", (glb) => {
   const boxSize = box.getSize(new THREE.Vector3()).length();
   const boxCenter = box.getCenter(new THREE.Vector3());
 
+  /* ---------- CONTACT SHADOW INSTANCE ---------- */
+  const contactShadow = createContactShadow(boxSize * 0.6, 0.35);
+  contactShadow.position.set(boxCenter.x, 0.01, boxCenter.z);
+  scene.add(contactShadow);
+
   const spotLight = new THREE.SpotLight(
     0xffffff,
     150,
@@ -217,7 +285,6 @@ loader.load("/models/jet3/blue.glb", (glb) => {
   spotLight.castShadow = true;
   spotLight.shadow.bias = -0.00005;
   spotLight.shadow.radius = 4;
-
   spotLight.shadow.mapSize.set(5000, 5000);
 
   modelWrapper.add(spotLight);
@@ -251,7 +318,6 @@ loader.load("/models/jet3/blue.glb", (glb) => {
     },
   });
 
-  // Start Ripples
   createRipple();
 });
 

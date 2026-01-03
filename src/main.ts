@@ -1,17 +1,22 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import GUI from "lil-gui";
 
 gsap.registerPlugin(ScrollTrigger);
 
-/* ------------------ LOADER ------------------ */
+// FIX: Normalize scroll for mobile to prevent jittery/laggy scrubbing
+if (window.innerWidth < 768) {
+  ScrollTrigger.normalizeScroll(true);
+  ScrollTrigger.config({ ignoreMobileResize: true });
+}
+
+/* ------------------ LOADER LOGIC ------------------ */
 const loaderEl = document.getElementById("loader") as HTMLElement;
 const loaderText = document.getElementById("loader-text") as HTMLElement;
-
 let displayedProgress = 0;
+const isMobile = window.innerWidth < 768;
 
 const loadingManager = new THREE.LoadingManager(
   () => {
@@ -26,7 +31,6 @@ const loadingManager = new THREE.LoadingManager(
   },
   (_, loaded, total) => {
     const target = (loaded / total) * 100;
-
     gsap.to(
       { v: displayedProgress },
       {
@@ -34,77 +38,75 @@ const loadingManager = new THREE.LoadingManager(
         duration: 0.25,
         ease: "power1.out",
         onUpdate() {
-          displayedProgress = Math.round(this.targets()[0].v);
+          displayedProgress = Math.round((this as any).targets()[0].v);
           loaderText.textContent = `${displayedProgress}%`;
         },
       }
     );
-  },
-  (url) => {
-    console.error("Error loading:", url);
   }
 );
 
-/* ------------------ SETUP ------------------ */
+/* ------------------ SCENE SETUP ------------------ */
 const container = document.querySelector("#canvas-container") as HTMLElement;
+const scene = new THREE.Scene();
 
 const camera = new THREE.PerspectiveCamera(
   45,
   window.innerWidth / window.innerHeight,
   0.1,
-  10000
+  1000
 );
 
-const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
+const renderer = new THREE.WebGLRenderer({
+  antialias: !isMobile, // Optimization: Disable AA on mobile for significant FPS boost
+  alpha: true,
+  powerPreference: "high-performance",
+});
 
-controls.minDistance = 5;
-controls.maxDistance = 20;
-controls.minPolarAngle = 0.5;
-controls.maxPolarAngle = 1.5;
-controls.autoRotate = false;
-controls.target = new THREE.Vector3(0, 1, 0);
-controls.enabled = false;
-controls.update();
-
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(window.devicePixelRatio);
 
 container.appendChild(renderer.domElement);
-const scene = new THREE.Scene();
 
-scene.receiveShadow = true;
+/* ------------------ CAMERA GUI ------------------ */
+const gui = new GUI({ width: 300 });
+gui.hide();
+gui.close();
 
-// Ground mesh
-const groundGeometry = new THREE.PlaneGeometry(2100, 2100, 32, 32);
-groundGeometry.rotateX(-Math.PI / 2);
-const groundMaterial = new THREE.ShadowMaterial({
-  opacity: 0.006,
-});
-const groundMesh = new THREE.Mesh(groundGeometry, groundMaterial);
-groundMesh.castShadow = false;
-groundMesh.receiveShadow = true;
+const lookAtParams = { followModel: true };
+gui.add(lookAtParams, "followModel").name("Look At Model");
 
-scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+/* ------------------ LIGHTING ------------------ */
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+scene.add(ambientLight);
 
-/* ------------------ PARTICLE SYSTEM ------------------ */
-const particleCount = 1000;
+const spotLight = new THREE.SpotLight(0xffffff, 150, 100, 0.3);
+spotLight.position.set(5, 10, 10);
+spotLight.castShadow = true;
+scene.add(spotLight);
+
+// NEW: Top Spotlight (Specifically for the model)
+const topSpotLight = new THREE.SpotLight(0xffffff, 100, 50, 0.45, 0.5, 1);
+topSpotLight.castShadow = true;
+topSpotLight.shadow.bias = -0.00005;
+topSpotLight.shadow.radius = 4;
+
+// FIX: 5000 is too high for mobile. 1024 is plenty for small screens.
+const shadowRes = isMobile ? 1024 : 2048;
+topSpotLight.shadow.mapSize.set(shadowRes, shadowRes);
+
+scene.add(topSpotLight);
+
+/* ------------------ PARTICLES ------------------ */
+const particleCount = isMobile ? 300 : 800; // Lowered slightly for mobile
 const particlesGeometry = new THREE.BufferGeometry();
 const particlesPositions = new Float32Array(particleCount * 3);
-const particlesVelocities = new Float32Array(particleCount * 3);
 
-for (let i = 0; i < particleCount * 3; i += 3) {
-  particlesPositions[i] = (Math.random() - 0.5) * 100;
-  particlesPositions[i + 1] = Math.random() * 50;
-  particlesPositions[i + 2] = (Math.random() - 0.5) * 100;
-
-  particlesVelocities[i] = (Math.random() - 0.5) * 0.02;
-  particlesVelocities[i + 1] = Math.random() * 0.01;
-  particlesVelocities[i + 2] = (Math.random() - 0.5) * 0.02;
+for (let i = 0; i < particleCount * 3; i++) {
+  particlesPositions[i] = (Math.random() - 0.5) * 60;
 }
 
 particlesGeometry.setAttribute(
@@ -114,9 +116,9 @@ particlesGeometry.setAttribute(
 
 const particlesMaterial = new THREE.PointsMaterial({
   color: 0x88ccff,
-  size: 0.15,
+  size: isMobile ? 0.12 : 0.08, // Slightly larger particles so we can use fewer
   transparent: true,
-  opacity: 0.6,
+  opacity: 0.4,
   blending: THREE.AdditiveBlending,
   depthWrite: false,
 });
@@ -124,209 +126,163 @@ const particlesMaterial = new THREE.PointsMaterial({
 const particleSystem = new THREE.Points(particlesGeometry, particlesMaterial);
 scene.add(particleSystem);
 
-/* ------------------ MODEL GROUPING ------------------ */
+/* ------------------ MODEL GROUPS ------------------ */
 const dragWrapper = new THREE.Group();
-scene.add(dragWrapper);
-
 const modelWrapper = new THREE.Group();
+scene.add(dragWrapper);
 dragWrapper.add(modelWrapper);
 
 /* ------------------ RIPPLE EFFECT ------------------ */
 const rippleGroup = new THREE.Group();
-rippleGroup.position.y = 0.5;
 scene.add(rippleGroup);
 
-const ringGeo = new THREE.RingGeometry(4, 4.5, 64);
+const ringGeo = new THREE.RingGeometry(4, 4.2, 32);
 const ringMatBase = new THREE.MeshBasicMaterial({
   color: 0xffffff,
   transparent: true,
-  opacity: 0.5,
+  opacity: 0.3,
   side: THREE.DoubleSide,
 });
 
 function createRipple() {
   const mesh = new THREE.Mesh(ringGeo, ringMatBase.clone());
   mesh.rotation.x = -Math.PI / 2;
+  mesh.position.y = -2;
   mesh.scale.set(0, 0, 0);
   rippleGroup.add(mesh);
 
-  const tl = gsap.timeline({
+  gsap.to(mesh.scale, { x: 4, y: 4, z: 4, duration: 4, ease: "none" });
+  gsap.to(mesh.material, {
+    opacity: 0,
+    duration: 4,
+    ease: "none",
     onComplete: () => {
       rippleGroup.remove(mesh);
+      mesh.geometry.dispose();
       (mesh.material as THREE.Material).dispose();
     },
   });
-
-  tl.to(mesh.scale, { x: 3, y: 3, z: 3, duration: 5, ease: "power1.out" });
-  tl.to(mesh.material, { opacity: 0, duration: 5, ease: "power1.out" }, "<");
-
-  gsap.delayedCall(5, createRipple);
 }
 
-/* ------------------ MOUSE PARALLAX ------------------ */
-const onMouseMove = (event: MouseEvent) => {
-  const x = (event.clientX / window.innerWidth) * 2 - 1;
-  const y = -(event.clientY / window.innerHeight) * 2 + 1;
+// Optimization: Increase interval on mobile
+setInterval(createRipple, isMobile ? 3000 : 2000);
 
-  const tiltX = -y * 0.1;
-  const tiltY = x * 0.3;
-
-  gsap.to(dragWrapper.rotation, {
-    x: tiltX * 0.25,
-    y: tiltY * 0.25,
-    duration: 1,
-    ease: "power2.out",
-    overwrite: true,
-  });
-
-  const cloudsContainer = document.querySelector("#clouds-container");
-  if (cloudsContainer) {
-    gsap.to(cloudsContainer, {
-      x: x * 30,
-      y: -y * 30,
-      duration: 1.5,
-      ease: "power2.out",
-      overwrite: true,
-    });
-  }
-};
-
-window.addEventListener("mousemove", onMouseMove);
-
-/* ------------------ CONTACT SHADOW (ROUNDED) ------------------ */
-function createContactShadow(size = 10, opacity = 0.35) {
-  const canvas = document.createElement("canvas");
-  canvas.width = 256;
-  canvas.height = 256;
-
-  const ctx = canvas.getContext("2d")!;
-  const gradient = ctx.createRadialGradient(128, 128, 10, 128, 128, 128);
-
-  gradient.addColorStop(0, `rgba(0,0,0,${opacity})`);
-  gradient.addColorStop(1, "rgba(0,0,0,0)");
-
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, 256, 256);
-
-  const texture = new THREE.CanvasTexture(canvas);
-
-  const material = new THREE.MeshBasicMaterial({
-    map: texture,
-    transparent: true,
-    depthWrite: false,
-  });
-
-  const geometry = new THREE.PlaneGeometry(size, size);
-  const mesh = new THREE.Mesh(geometry, material);
-
-  mesh.rotation.x = -Math.PI / 2;
-  mesh.renderOrder = 2;
-
-  return mesh;
-}
-
-/* ------------------ LOADER ------------------ */
+/* ------------------ MODEL LOADING ------------------ */
 const loader = new GLTFLoader(loadingManager);
 
 loader.load("/models/jet3/blue.glb", (glb) => {
   const model = glb.scene;
-  model.castShadow = true;
   modelWrapper.add(model);
 
   model.traverse((child) => {
-    if ((child as any).isObject3D) {
+    if ((child as any).isMesh) {
       child.castShadow = true;
       child.receiveShadow = true;
     }
   });
 
-  const flag = 0;
-  const planeSettings = {
-    rotateX: flag ? 0 : 0,
-    rotateY: flag ? 0 : 56.16,
-    rotateZ: flag ? 0 : 8.76,
-  };
-
-  const updateRotation = () => {
-    modelWrapper.rotation.set(
-      THREE.MathUtils.degToRad(planeSettings.rotateX),
-      THREE.MathUtils.degToRad(planeSettings.rotateY),
-      THREE.MathUtils.degToRad(planeSettings.rotateZ)
-    );
-  };
-  updateRotation();
-
-  /* ---------- AUTO-CENTER & LIGHTING ---------- */
   const box = new THREE.Box3().setFromObject(model);
   const boxSize = box.getSize(new THREE.Vector3()).length();
   const boxCenter = box.getCenter(new THREE.Vector3());
 
-  /* ---------- CONTACT SHADOW INSTANCE ---------- */
-  const contactShadow = createContactShadow(boxSize * 0.6, 0.35);
-  contactShadow.position.set(boxCenter.x, 0.01, boxCenter.z);
-  scene.add(contactShadow);
+  topSpotLight.position.set(boxCenter.x, boxCenter.y + 20, boxCenter.z);
+  topSpotLight.target = model;
 
-  const spotLight = new THREE.SpotLight(
-    0xffffff,
-    150,
-    boxSize * 10,
-    Math.PI / 5,
-    0.4,
-    1
-  );
-  spotLight.position.set(
-    boxCenter.x + 2,
-    boxCenter.y + boxSize * 2,
-    boxCenter.z + boxSize * 1.5
-  );
-  spotLight.target.position.copy(boxCenter);
-  spotLight.castShadow = true;
-  spotLight.shadow.bias = -0.00005;
-  spotLight.shadow.radius = 4;
-  spotLight.shadow.mapSize.set(5000, 5000);
-
-  modelWrapper.add(spotLight);
-
-  // Original Camera Positioning
-  const halfFov = THREE.MathUtils.degToRad(camera.fov * 0.5);
-  const distance = (boxSize * 0.5) / Math.tan(halfFov);
+  const halfSizeToFitOnScreen = boxSize * 1.2 * 0.5;
+  const halfFovY = THREE.MathUtils.degToRad(camera.fov * 0.5);
+  let distance = halfSizeToFitOnScreen / Math.tan(halfFovY);
+  if (isMobile) distance *= 1.5;
   const direction = new THREE.Vector3()
-    .subVectors(boxCenter, camera.position)
+    .subVectors(camera.position, boxCenter)
+    .multiply(new THREE.Vector3(1, 0, 1))
     .normalize();
-  camera.position.copy(direction.multiplyScalar(distance).add(boxCenter));
-  camera.updateProjectionMatrix();
 
-  /* ---------- ANIMATIONS ---------- */
+  const cameraPosition = direction.multiplyScalar(distance).add(boxCenter);
+
+  camera.position.set(
+    cameraPosition.x + 15,
+    cameraPosition.y + 5,
+    -1 * cameraPosition.z + 15
+  );
+
+  camera.near = boxSize / 100;
+  camera.far = boxSize * 100;
+  camera.updateProjectionMatrix();
+  camera.lookAt(boxCenter);
+
+  model.rotation.set(0, 0, -THREE.MathUtils.degToRad(10));
+
   gsap.to(model.rotation, {
-    z: -1 * THREE.MathUtils.degToRad(planeSettings.rotateZ),
-    duration: 2.5,
+    z: THREE.MathUtils.degToRad(15),
+    duration: 2,
     repeat: -1,
     yoyo: true,
     ease: "sine.inOut",
   });
 
   gsap.to(modelWrapper.rotation, {
-    x: "-=0.1",
-    y: "-=0.8",
+    y: THREE.MathUtils.degToRad(-45),
+    z: THREE.MathUtils.degToRad(-10),
     scrollTrigger: {
       trigger: "body",
       start: "top top",
       end: "bottom bottom",
-      scrub: 1.5,
+      scrub: isMobile ? 0.5 : 1.2, // FIX: Lower scrub on mobile feels more responsive
     },
   });
-
-  createRipple();
 });
 
-/* ------------------ ANIMATION LOOP ------------------ */
+/* ------------------ INTERACTION ------------------ */
+const handleMove = (x: number, y: number) => {
+  gsap.to(dragWrapper.rotation, {
+    y: x * 0.1,
+    x: y * 0.1,
+    duration: 0.5, // Increased slightly for smoothness
+    ease: "power2.out",
+  });
+
+  gsap.to(".cloud", {
+    x: x * 40,
+    y: y * 40,
+    duration: 2,
+    stagger: 0.05,
+    force3D: true, // GPU acceleration for DOM elements
+  });
+};
+
+window.addEventListener("mousemove", (e) => {
+  const x = e.clientX / window.innerWidth - 0.5;
+  const y = e.clientY / window.innerHeight - 0.5;
+  handleMove(x, y);
+});
+
+// Added Touch support for the "look around" effect
+window.addEventListener(
+  "touchmove",
+  (e) => {
+    const x = e.touches[0].clientX / window.innerWidth - 0.5;
+    const y = e.touches[0].clientY / window.innerHeight - 0.5;
+    handleMove(x, y);
+  },
+  { passive: true }
+);
+
+/* ------------------ RENDER LOOP ------------------ */
 function animate() {
   requestAnimationFrame(animate);
-  controls.update();
+
+  if (lookAtParams.followModel) {
+    camera.lookAt(modelWrapper.position);
+  }
+
+  particleSystem.rotation.y += 0.0005;
+  particleSystem.rotation.x += 0.0002;
+
   renderer.render(scene, camera);
 }
 animate();
 
+/* ------------------ RESIZE ------------------ */
 window.addEventListener("resize", () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
